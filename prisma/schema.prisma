@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  username     String       @unique
+  passwordHash String
+  fullName     String
+  email        String       @unique
+  status       String       @default("active")
+  roleId       Int
+  branchId     Int
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  role         Role         @relation(fields: [roleId], references: [id])
+  branch       Branch       @relation(fields: [branchId], references: [id])
+  attendanceRecords AttendanceRecord[]
+  shiftAssignments ShiftAssignment[]
+  leaveRequests  LeaveRequest[]
+  approvedLeaves LeaveRequest[] @relation("ApprovedBy")
+  managedBranch Branch? @relation("BranchManager")
+  auditLogs    AuditLog[]
+}
+
+model Role {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  description String?
+
+  users       User[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id        Int @id @default(autoincrement())
+  action    String
+  resource  String
+  rolePermissions RolePermission[]
+  @@unique([action, resource])
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  assignedAt   DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model Branch {
+  id        Int    @id @default(autoincrement())
+  name      String @unique
+  location  String
+  managerId Int?   // optional manager user id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  manager   User? @relation("BranchManager", fields: [managerId], references: [id])
+  users     User[]
+  shifts    Shift[]
+  attendanceRecords AttendanceRecord[]
+  leaveRequests LeaveRequest[]
+}
+
+model Shift {
+  id         Int     @id @default(autoincrement())
+  name       String
+  branchId   Int
+  date       DateTime
+  startTime  DateTime
+  endTime    DateTime
+  createdBy  Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  branch     Branch  @relation(fields: [branchId], references: [id])
+  creator    User    @relation(fields: [createdBy], references: [id])
+  assignments ShiftAssignment[]
+}
+
+model ShiftAssignment {
+  id       Int    @id @default(autoincrement())
+  shiftId  Int
+  userId   Int
+  status   String   @default("assigned")
+  assignedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shift    Shift   @relation(fields: [shiftId], references: [id])
+  user     User    @relation(fields: [userId], references: [id])
+}
+
+model AttendanceRecord {
+  id        Int    @id @default(autoincrement())
+  userId    Int
+  branchId  Int
+  shiftId   Int?
+  timestamp DateTime @default(now())
+  method    String
+  geoLocation Json?
+  deviceId  String?
+
+  user      User   @relation(fields: [userId], references: [id])
+  branch    Branch @relation(fields: [branchId], references: [id])
+  shift     Shift? @relation(fields: [shiftId], references: [id])
+}
+
+model LeaveRequest {
+  id         Int    @id @default(autoincrement())
+  userId     Int
+  branchId   Int
+  fromDate   DateTime
+  toDate     DateTime
+  type       String
+  reason     String?
+  status     String  @default("pending")
+  approvedBy Int?
+  approvedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  user       User    @relation(fields: [userId], references: [id])
+  branch     Branch  @relation(fields: [branchId], references: [id])
+  approver   User?   @relation("ApprovedBy", fields: [approvedBy], references: [id])
+}
+
+model AuditLog {
+  id         Int    @id @default(autoincrement())
+  userId     Int
+  action     String
+  resource   String
+  resourceId Int?
+  timestamp  DateTime @default(now())
+  meta       Json?
+
+  user       User @relation(fields: [userId], references: [id])
+}
