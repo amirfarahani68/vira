@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  MANAGER
+  SUPERVISOR
+  TECHNICIAN
+}
+
+enum AttendanceType {
+  CHECK_IN
+  CHECK_OUT
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id          String          @id @default(uuid())
+  username    String          @unique
+  password    String
+  fullName    String
+  roleId      Int
+  branchId    Int
+  role        Role            @relation(fields: [roleId], references: [id])
+  branch      Branch          @relation(fields: [branchId], references: [id])
+  assignments ShiftAssignment[]
+  attendanceRecords AttendanceRecord[]
+  leaveRequests LeaveRequest[]
+  auditLogs   AuditLog[]      @relation("UserAuditLogs")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Role {
+  id          Int             @id @default(autoincrement())
+  name        String          @unique
+  description String?
+  users       User[]
+  rolePermissions RolePermission[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Permission {
+  id          Int             @id @default(autoincrement())
+  name        String          @unique
+  description String?
+  rolePermissions RolePermission[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role        @relation(fields: [roleId], references: [id])
+  permission   Permission  @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model Branch {
+  id        Int          @id @default(autoincrement())
+  name      String
+  code      String?      @unique
+  users     User[]
+  shifts    Shift[]
+  assignments ShiftAssignment[]
+  attendanceRecords AttendanceRecord[]
+  leaveRequests LeaveRequest[]
+  auditLogs AuditLog[]    @relation("BranchAuditLogs")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model Shift {
+  id        Int            @id @default(autoincrement())
+  branchId  Int
+  branch    Branch         @relation(fields: [branchId], references: [id])
+  name      String
+  startTime DateTime
+  endTime   DateTime
+  assignments ShiftAssignment[]
+  attendanceRecords AttendanceRecord[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([branchId])
+}
+
+model ShiftAssignment {
+  id        Int         @id @default(autoincrement())
+  userId    String
+  branchId  Int
+  shiftId   Int
+  date      DateTime
+  user      User        @relation(fields: [userId], references: [id])
+  branch    Branch      @relation(fields: [branchId], references: [id])
+  shift     Shift       @relation(fields: [shiftId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([userId, date])
+}
+
+model AttendanceRecord {
+  id        Int         @id @default(autoincrement())
+  userId    String
+  branchId  Int
+  shiftId   Int?
+  type      AttendanceType
+  timestamp DateTime     @default(now())
+  user      User         @relation(fields: [userId], references: [id])
+  branch    Branch       @relation(fields: [branchId], references: [id])
+  shift     Shift?       @relation(fields: [shiftId], references: [id])
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([userId, timestamp])
+}
+
+model LeaveRequest {
+  id        Int         @id @default(autoincrement())
+  userId    String
+  branchId  Int
+  startDate DateTime
+  endDate   DateTime
+  reason    String?
+  status    LeaveStatus @default(PENDING)
+  user      User        @relation(fields: [userId], references: [id])
+  branch    Branch      @relation(fields: [branchId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([userId, startDate, endDate])
+}
+
+model AuditLog {
+  id        Int         @id @default(autoincrement())
+  userId    String?
+  branchId  Int?
+  action    String
+  metadata  Json?
+  user      User?       @relation("UserAuditLogs", fields: [userId], references: [id])
+  branch    Branch?     @relation("BranchAuditLogs", fields: [branchId], references: [id])
+  createdAt DateTime    @default(now())
+
+  @@index([userId, branchId])
+}
